@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbzLyxCzESbWp2_zVhVifltZV0KmPm6uEF0rN2a7r9ra2Otz4S8ozQu7J-5EPtbzXrRS/exec';
+var SU='https://script.google.com/macros/s/AKfycbxJaBOD_71xEly9XNK5hI9bVYZnuxneOXwl8k4Ah_QGtUiN77JCnNBqDNrFTV20wQ5e/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
@@ -682,7 +682,7 @@ async function enviar(){
   if(empleadosDB.length>0&&empleadosDB.indexOf(correo)<0){
     alert('Este correo no esta registrado en el sistema. Contacta a Gestion Humana.');return;
   }
-  if(!vehiculo){alert('Selecciona el vehiculo.');return;}
+  // vehiculo opcional
   if(!tipo){alert('Selecciona que necesitas registrar.');return;}
   if(tipo==='ot'&&(!gv('fApOt')||!gv('fFechaOt')||!gv('fHoraIni')||!gv('fHoraFin'))){alert('Tiempo extra: completa director, fecha y horario.');return;}
   if(tipo==='comp'&&(!gv('fApComp')||!gv('fFechaComp'))){alert('Compensatorio: selecciona director y fecha.');return;}
@@ -876,15 +876,38 @@ async function confirmarFoto(){
 async function enviarPayload(payload,sb){
   try{
     if(!navigator.onLine)throw new Error('offline');
-    await fetch(SU,{method:'POST',mode:'no-cors',
+    var resp=await fetch(SU,{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload)});
+    var txt=await resp.text();
+    try{
+      var d=JSON.parse(txt);
+      if(d.advertencia==='MARCAJE_DUPLICADO'){
+        if(sb){sb.disabled=false;sb.textContent='Registrar';}
+        // Show warning overlay instead of success
+        mostrarAdvertenciaDuplicado(d.msg, d.ultimoRegistro, payload.tipo);
+        return;
+      }
+    }catch(pe){}
   }catch(ex){
     await queueSave(SU,payload);
     showOfflineToast('Sin conexion. Registro guardado con hora exacta ('+new Date().toLocaleTimeString('es-CO')+') y se enviara cuando recuperes senal.','#92400E');
     if(sb){sb.disabled=false;sb.textContent='Registrar';}
     return;
   }
+}
+
+function mostrarAdvertenciaDuplicado(msg, ultimoReg, tipoIntento){
+  var tipoLabel=tipoIntento==='Entrada a turno'?'entrada':'salida';
+  var ovEl=document.getElementById('ovIc');
+  var ovMsg=document.getElementById('ovMsg');
+  var ovSub=document.getElementById('ovSub');
+  if(ovEl)ovEl.style.background='#FEF2F2';
+  if(ovMsg){ovMsg.textContent='\u26A0\uFE0F Ya tienes una '+tipoLabel+' registrada';ovMsg.style.color='#991B1B';}
+  if(ovSub){ovSub.innerHTML='Ultimo registro: <b>'+ultimoReg+'</b><br><br>'+msg;ovSub.style.color='#374151';}
+  // Show the overlay with warning state
+  var ov=document.getElementById('ov');
+  if(ov)ov.style.display='flex';
 }
 </script>
 <div id="photoModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem">
