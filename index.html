@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbyaYCF1rkzU83txO8FDB0miSi-L0e-YAazzSO-gJpyab7enY75UihxUQq5ZKfTh9T5-/exec';
+var SU='https://script.google.com/macros/s/AKfycbxpj6YIDXX1tOH1qGTqVcExg1-yljCLAjYfSR1rzCVvQUWwSMp_g5TphWRTSQERYVc/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
@@ -745,6 +745,27 @@ async function doSend(correo,vehiculo){
     }
   }catch(fpEx){console.log('fp check:',fpEx.message);}
   sb.textContent='Enviando...';
+  // Client-side duplicate check (backup for no-cors)
+  if(payload.tipo==='Entrada a turno'||payload.tipo==='Salida de turno'){
+    var lastKey='amg_last_'+correo;
+    var lastData=localStorage.getItem(lastKey);
+    if(lastData){
+      try{
+        var last=JSON.parse(lastData);
+        if(last.tipo===payload.tipo){
+          var minsAgo=Math.round((Date.now()-last.ts)/60000);
+          sb.disabled=false;sb.textContent='Registrar';
+          mostrarAdvertenciaDuplicado(
+            'Ya tienes un registro de '+payload.tipo+' reciente. Si es un error solicita correccion de marcaje a Gestion Humana.',
+            new Date(last.ts).toLocaleString('es-CO'),
+            payload.tipo
+          );
+          return;
+        }
+      }catch(e){}
+    }
+    localStorage.setItem(lastKey,JSON.stringify({tipo:payload.tipo,ts:Date.now()}));
+  }
   await enviarPayload(payload,sb);
   gLat=null;gLng=null;
   // Pedir GPS inmediatamente para el siguiente registro
@@ -876,19 +897,14 @@ async function confirmarFoto(){
 async function enviarPayload(payload,sb){
   try{
     if(!navigator.onLine)throw new Error('offline');
+    // Use no-cors to avoid CORS preflight issues with GAS
+    // Data is saved server-side even though response is opaque
     var resp=await fetch(SU,{method:'POST',
-      headers:{'Content-Type':'application/json'},
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
       body:JSON.stringify(payload)});
-    var txt=await resp.text();
-    try{
-      var d=JSON.parse(txt);
-      if(d.advertencia==='MARCAJE_DUPLICADO'){
-        if(sb){sb.disabled=false;sb.textContent='Registrar';}
-        // Show warning overlay instead of success
-        mostrarAdvertenciaDuplicado(d.msg, d.ultimoRegistro, payload.tipo);
-        return;
-      }
-    }catch(pe){}
+    // With no-cors we can't read response, so assume success
+    // The server will save the data regardless
   }catch(ex){
     await queueSave(SU,payload);
     showOfflineToast('Sin conexion. Registro guardado con hora exacta ('+new Date().toLocaleTimeString('es-CO')+') y se enviara cuando recuperes senal.','#92400E');
