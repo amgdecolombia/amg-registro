@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbzb8xCSHrGrAoYhXhLjNBoAm3dZ2Udou3by0VVr8p6ayWSY-MrcfDCC-FhFh9cnYbn1/exec';
+var SU='https://script.google.com/macros/s/AKfycbxXIiSbS9JijDz5fBneQRMkiP7JsF-u98RTb52xzobkQBrknoxdRbw-nwArdjGRaHeS/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
@@ -528,7 +528,7 @@ if(navigator.geolocation){
 
 /* ── LOAD DATA FROM SCRIPT ── */
 function cargarDatos(){
-  fetch(SU+'?action=getEmpleados')
+  fetch(SU+'?action=getEmpleados&t='+Date.now())
     .then(function(r){return r.json();})
     .then(function(d){empleadosDB=(d.empleados||[]).map(function(e){return (e.Email||e.email||'').toLowerCase();});})
     .catch(function(){});
@@ -680,7 +680,7 @@ async function enviar(){
   var validDomain=correo.endsWith('@amgdecolombia.com')||correo.endsWith('@inmovimento.co');
   if(!validDomain){alert('El correo debe ser corporativo.');return;}
   if(empleadosDB.length>0&&empleadosDB.indexOf(correo)<0){
-    alert('Este correo no esta registrado en el sistema. Contacta a Gestion Humana.');return;
+    alert('Este correo no esta registrado o el empleado ya no esta activo.\n\nSi crees que es un error contacta a Gestion Humana:\ngestionhumana@amgdecolombia.com');return;
   }
   // vehiculo opcional
   if(!tipo){alert('Selecciona que necesitas registrar.');return;}
