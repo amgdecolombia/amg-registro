@@ -470,7 +470,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbwWFssmqpO4F_QfSVWXnkQj6ALU-F9XZU6yUVBj4lwFkWMI488PY26iLnokRcAUPsOI/exec';
+var SU='https://script.google.com/macros/s/AKfycbwbhmFiGe9uzDfO_OR88m0k0Y-h2vx8QPbtE3Mn_SHrK55w8LkV9Yh833lh1VIZBwYn/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
@@ -926,6 +926,27 @@ function mostrarAdvertenciaDuplicado(msg, ultimoReg, tipoIntento){
   var ov=document.getElementById('ov');
   if(ov)ov.style.display='flex';
 }
+
+async function enviarSugReg(){
+  var texto=document.getElementById('sugTextoReg').value.trim();
+  var tipo=document.getElementById('sugTipoReg').value;
+  var msgEl=document.getElementById('sugMsgReg');
+  if(!texto){msgEl.textContent='Escribe tu sugerencia antes de enviar.';msgEl.style.background='#FEF2F2';msgEl.style.color='#991B1B';msgEl.style.display='block';return;}
+  var emailActual=document.getElementById('fEmail')?document.getElementById('fEmail').value.trim().toLowerCase():'';
+  msgEl.textContent='Enviando...';msgEl.style.background='#F8FAFC';msgEl.style.color='#374151';msgEl.style.display='block';
+  try{
+    var url=SU+'?action=saveSugerencia&email='+encodeURIComponent(emailActual||'anonimo')
+      +'&nombre='+encodeURIComponent(emailActual||'Empleado')
+      +'&tipo='+encodeURIComponent(tipo)
+      +'&texto='+encodeURIComponent(texto);
+    var r=await fetch(url);
+    var d=JSON.parse(await r.text());
+    msgEl.textContent=d.status==='ok'?'Enviado. Gracias por tu aporte.':'Error: '+(d.msg||'');
+    msgEl.style.background=d.status==='ok'?'#ECFDF5':'#FEF2F2';
+    msgEl.style.color=d.status==='ok'?'#065F46':'#991B1B';
+    if(d.status==='ok'){document.getElementById('sugTextoReg').value='';setTimeout(function(){document.getElementById('sugModalReg').style.display='none';msgEl.style.display='none';},2000);}
+  }catch(e){msgEl.textContent='Error: '+e.message;msgEl.style.background='#FEF2F2';msgEl.style.color='#991B1B';}
+}
 </script>
 <div id="photoModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem">
   <div style="background:white;border-radius:20px;padding:1.5rem;max-width:360px;width:100%;text-align:center">
@@ -945,5 +966,28 @@ function mostrarAdvertenciaDuplicado(msg, ultimoReg, tipoIntento){
     <button onclick="retryFoto()" id="photoRetryBtn" style="display:none;margin-top:8px;width:100%;padding:10px;border-radius:10px;border:1.5px solid #E2E8F0;background:white;color:#374151;font-family:inherit;font-size:12px;cursor:pointer">Repetir foto</button>
   </div>
 </div>
+
+<div id="sugModalReg" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;padding:1.5rem">
+  <div style="background:white;border-radius:18px;padding:1.5rem;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 style="font-size:15px;font-weight:700;color:#0A3D47;margin:0">&#128161; Sugerencia</h3>
+      <button onclick="document.getElementById('sugModalReg').style.display='none'" style="border:none;background:none;font-size:20px;cursor:pointer;color:#6B7280">&times;</button>
+    </div>
+    <p style="font-size:12px;color:#6B7280;margin-bottom:12px">Tu sugerencia llega directamente a Gestion Humana.</p>
+    <select id="sugTipoReg" style="width:100%;padding:9px 12px;border:1.5px solid #E5E7EB;border-radius:9px;font-family:inherit;font-size:13px;margin-bottom:10px;outline:none;background:white">
+      <option value="Sugerencia">Sugerencia de mejora</option>
+      <option value="Error">Reporte de error</option>
+      <option value="Consulta">Consulta a GH</option>
+      <option value="Otro">Otro</option>
+    </select>
+    <textarea id="sugTextoReg" placeholder="Escribe tu sugerencia..." style="width:100%;height:100px;padding:10px 12px;border:1.5px solid #E5E7EB;border-radius:9px;font-family:inherit;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
+    <div id="sugMsgReg" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:500"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="document.getElementById('sugModalReg').style.display='none'" style="flex:1;padding:10px;border-radius:9px;border:1.5px solid #E5E7EB;background:white;font-family:inherit;font-size:13px;cursor:pointer">Cancelar</button>
+      <button onclick="enviarSugReg()" style="flex:2;padding:10px;border-radius:9px;border:none;background:#0A3D47;color:white;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">Enviar</button>
+    </div>
+  </div>
+</div>
+<button onclick="document.getElementById('sugModalReg').style.display='flex'" style="position:fixed;bottom:20px;left:20px;z-index:900;padding:10px 16px;border-radius:99px;border:none;background:#0A3D47;color:white;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(10,61,71,.4)">&#128161; Sugerencia</button>
 </body>
 </html>
