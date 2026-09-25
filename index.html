@@ -2,6 +2,10 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>AMG — Registro de Turno</title>
 <link rel="icon" type="image/jpeg" href="data:image/jpeg;base64,/9j/4AAQSkZJRgABAgEAlgCWAAD/7QAsUGhvdG9zaG9wIDMuMAA4QklNA+0AAAAAABAAlgAAAAEAAQCWAAAAAQAB/+FTI2h0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8APD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQi">
@@ -404,7 +408,7 @@ async function flushOfflineQueue(){
     var item=items[i];
     try{
       await fetch(item.url,{method:'POST',mode:'no-cors',
-        headers:{'Content-Type':'application/json'},
+        headers:{'Content-Type':'text/plain'},
         body:JSON.stringify(item.body)});
       await queueDelete(item.id);
       sent++;
@@ -470,7 +474,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbyqrqFeAvyTL3e0qw3mISGrCZr7AJug1xpKQs4WmXIH5kM7ZI_8FKgZ6TNeC7HX2Nhi/exec';
+var SU='https://script.google.com/macros/s/AKfycbzVvi7Kmlm08EFJKXlx2yUCvLgh4ZA_WV0JjrmQg5WwTKZ7BDJcRRcRhQoIyPE1IFdP/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
