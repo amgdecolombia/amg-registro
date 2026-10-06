@@ -407,9 +407,11 @@ async function flushOfflineQueue(){
   for(var i=0;i<items.length;i++){
     var item=items[i];
     try{
-      await fetch(item.url,{method:'POST',mode:'no-cors',
-        headers:{'Content-Type':'text/plain'},
-        body:JSON.stringify(item.body)});
+      var urlQ=item.url+'?action=marcar&datos='+encodeURIComponent(JSON.stringify(item.body))+'&t='+Date.now();
+      var rq=await fetch(urlQ);
+      var tq=(await rq.text()||'').trim();
+      if(tq.charAt(0)==='<')throw new Error('servicio');
+      JSON.parse(tq); // confirma que el servidor proceso el registro
       await queueDelete(item.id);
       sent++;
     }catch(e){break;} // stop if still offline
@@ -474,7 +476,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbwIg0VFrtKyrUNiYmO5Ad_Qh0B_fmhDLkJdDLWOjmVlq6J9i-d38k7xLt_TecIQouGs/exec';
+var SU='https://script.google.com/macros/s/AKfycbyAKAG3p_kVmQ1Louto4T5Q7tdW_Xk6nnbc81DLY0D55cjFRoLQh2SZwMe4mSN47Bty/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
@@ -750,27 +752,7 @@ async function doSend(correo,vehiculo){
     }
   }catch(fpEx){console.log('fp check:',fpEx.message);}
   sb.textContent='Enviando...';
-  // Client-side duplicate check (backup for no-cors)
-  if(payload.tipo==='Entrada a turno'||payload.tipo==='Salida de turno'){
-    var lastKey='amg_last_'+correo;
-    var lastData=localStorage.getItem(lastKey);
-    if(lastData){
-      try{
-        var last=JSON.parse(lastData);
-        if(last.tipo===payload.tipo){
-          var minsAgo=Math.round((Date.now()-last.ts)/60000);
-          sb.disabled=false;sb.textContent='Registrar';
-          mostrarAdvertenciaDuplicado(
-            'Ya tienes un registro de '+payload.tipo+' reciente. Si es un error solicita correccion de marcaje a Gestion Humana.',
-            new Date(last.ts).toLocaleString('es-CO'),
-            payload.tipo
-          );
-          return;
-        }
-      }catch(e){}
-    }
-    localStorage.setItem(lastKey,JSON.stringify({tipo:payload.tipo,ts:Date.now()}));
-  }
+  // El servidor es la unica fuente de verdad para duplicados
   await enviarPayload(payload,sb);
   gLat=null;gLng=null;
   // Pedir GPS inmediatamente para el siguiente registro
@@ -900,22 +882,54 @@ async function confirmarFoto(){
 }
 
 async function enviarPayload(payload,sb){
-  try{
-    if(!navigator.onLine)throw new Error('offline');
-    // Use no-cors to avoid CORS preflight issues with GAS
-    // Data is saved server-side even though response is opaque
-    var resp=await fetch(SU,{method:'POST',
-      mode:'no-cors',
-      headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify(payload)});
-    // With no-cors we can't read response, so assume success
-    // The server will save the data regardless
-  }catch(ex){
+  if(!navigator.onLine){
     await queueSave(SU,payload);
-    showOfflineToast('Sin conexion. Registro guardado con hora exacta ('+new Date().toLocaleTimeString('es-CO')+') y se enviara cuando recuperes senal.','#92400E');
+    showOfflineToast('Sin conexion. Tu registro quedo guardado con la hora exacta ('+new Date().toLocaleTimeString('es-CO')+') y se enviara solo cuando recuperes senal.','#92400E');
     if(sb){sb.disabled=false;sb.textContent='Registrar';}
     return;
   }
+  // Envio verificable: el servidor confirma que el registro quedo guardado
+  var confirmado=false, respuesta=null;
+  for(var intento=1;intento<=2 && !confirmado;intento++){
+    if(sb && intento>1)sb.textContent='Reintentando...';
+    try{
+      var url=SU+'?action=marcar&datos='+encodeURIComponent(JSON.stringify(payload))+'&t='+Date.now();
+      var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+      var tmr=ctrl?setTimeout(function(){ctrl.abort();}, intento===1?15000:25000):null;
+      var r=await fetch(url, ctrl?{signal:ctrl.signal}:{});
+      if(tmr)clearTimeout(tmr);
+      var txt=(await r.text()||'').trim();
+      if(txt.charAt(0)==='<')throw new Error('servicio');
+      respuesta=JSON.parse(txt);
+      confirmado=true;
+    }catch(exNet){
+      if(intento>=2){
+        // No se pudo confirmar: se guarda en cola y se reenvia solo
+        await queueSave(SU,payload);
+        showOfflineToast('No pudimos confirmar el envio. Tu registro quedo guardado con la hora exacta y se enviara automaticamente. No lo repitas.','#92400E');
+        if(sb){sb.disabled=false;sb.textContent='Registrar';}
+        return;
+      }
+      await new Promise(function(res){setTimeout(res,1500);});
+    }
+  }
+  if(respuesta && respuesta.advertencia==='MARCAJE_DUPLICADO'){
+    if(sb){sb.disabled=false;sb.textContent='Registrar';}
+    mostrarAdvertenciaDuplicado(respuesta.msg, respuesta.ultimoRegistro, payload.tipo);
+    return;
+  }
+  if(respuesta && respuesta.bloqueado){
+    if(sb){sb.disabled=false;sb.textContent='Registrar';}
+    alert(respuesta.msg||'No es posible registrar en este momento.');
+    return;
+  }
+  if(respuesta && respuesta.status==='error'){
+    await queueSave(SU,payload);
+    showOfflineToast('Tu registro quedo guardado y se reintentara automaticamente.','#92400E');
+    if(sb){sb.disabled=false;sb.textContent='Registrar';}
+    return;
+  }
+  return respuesta;
 }
 
 function mostrarAdvertenciaDuplicado(msg, ultimoReg, tipoIntento){
@@ -951,6 +965,51 @@ async function enviarSugReg(){
     if(d.status==='ok'){document.getElementById('sugTextoReg').value='';setTimeout(function(){document.getElementById('sugModalReg').style.display='none';msgEl.style.display='none';},2000);}
   }catch(e){msgEl.textContent='Error: '+e.message;msgEl.style.background='#FEF2F2';msgEl.style.color='#991B1B';}
 }
+
+// ── Estado del empleado: ultimo registro guardado en el servidor ─────────────
+async function consultarMiEstado(correo){
+  var box=document.getElementById('miEstadoBox');
+  if(!box||!correo)return;
+  try{
+    var r=await fetch(SU+'?action=miEstado&email='+encodeURIComponent(correo)+'&t='+Date.now());
+    var txt=(await r.text()||'').trim();
+    if(txt.charAt(0)==='<')return;
+    var d=JSON.parse(txt);
+    if(d.status!=='ok')return;
+    if(!d.ultimo){
+      box.style.background='#EFF6FF';box.style.color='#1E40AF';box.style.border='1.5px solid #BFDBFE';
+      box.innerHTML='Aun no tienes marcajes registrados. Tu primer registro debe ser una <b>Entrada a turno</b>.';
+      box.style.display='block';return;
+    }
+    var u=d.ultimo;
+    var esEntrada=(u.tipo||'').indexOf('Entrada')>=0;
+    if(esEntrada&&!u.hoy){
+      box.style.background='#FFFBEB';box.style.color='#92400E';box.style.border='1.5px solid #FDE68A';
+      box.innerHTML='Tu ultimo registro fue <b>'+u.tipo+'</b> el '+u.fecha+', de un dia anterior. '+
+        'Puedes marcar normalmente: ese dia quedara reportado como jornada incompleta y tu lider podra corregirlo.';
+    } else {
+      box.style.background='#ECFDF5';box.style.color='#065F46';box.style.border='1.5px solid #A7F3D0';
+      box.innerHTML='Tu ultimo registro confirmado: <b>'+u.tipo+'</b> el '+u.fecha+'. '+
+        'Lo que sigue es una <b>'+(esEntrada?'Salida de turno':'Entrada a turno')+'</b>.';
+    }
+    box.style.display='block';
+  }catch(e){}
+}
+
+(function engancharEstado(){
+  var el=document.getElementById('fEmail');
+  if(!el)return;
+  var tmr=null;
+  el.addEventListener('blur',function(){
+    var v=(el.value||'').trim().toLowerCase();
+    if(v.indexOf('@')>0)consultarMiEstado(v);
+  });
+  el.addEventListener('input',function(){
+    clearTimeout(tmr);
+    var v=(el.value||'').trim().toLowerCase();
+    if(v.indexOf('@')>0)tmr=setTimeout(function(){consultarMiEstado(v);},900);
+  });
+})();
 </script>
 <div id="photoModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem">
   <div style="background:white;border-radius:20px;padding:1.5rem;max-width:360px;width:100%;text-align:center">
@@ -986,7 +1045,8 @@ async function enviarSugReg(){
     </select>
     <textarea id="sugTextoReg" placeholder="Escribe tu sugerencia..." style="width:100%;height:100px;padding:10px 12px;border:1.5px solid #E5E7EB;border-radius:9px;font-family:inherit;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
     <div id="sugMsgReg" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:500"></div>
-    <div style="display:flex;gap:8px;margin-top:12px">
+    <div id="miEstadoBox" style="display:none;margin:0 0 14px 0;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.45"></div>
+          <div style="display:flex;gap:8px;margin-top:12px">
       <button onclick="document.getElementById('sugModalReg').style.display='none'" style="flex:1;padding:10px;border-radius:9px;border:1.5px solid #E5E7EB;background:white;font-family:inherit;font-size:13px;cursor:pointer">Cancelar</button>
       <button onclick="enviarSugReg()" style="flex:2;padding:10px;border-radius:9px;border:none;background:#0A3D47;color:white;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">Enviar</button>
     </div>
