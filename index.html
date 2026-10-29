@@ -229,7 +229,7 @@ textarea.fi{resize:none;height:60px;font-size:13px;}
         </div>
       </div>
       <div class="xtra" id="xOt">
-        <div class="fg"><label class="lbl">Director aprobador</label><div class="sw"><select class="fs" id="fApOt"><option value="">Selecciona...</option></select></div></div>
+        <div class="fg"><label class="lbl">Jefe directo que aprueba</label><div class="sw"><select class="fs" id="fApOt"><option value="">Selecciona...</option></select></div></div>
         <div class="fg"><label class="lbl">Fecha del tiempo extra</label><input class="fi" type="date" id="fFechaOt"></div>
         <div class="fg"><label class="lbl">Horario</label>
           <div class="tg">
@@ -241,13 +241,13 @@ textarea.fi{resize:none;height:60px;font-size:13px;}
         <div class="notice">La solicitud sera revisada y te notificaremos por correo.</div>
       </div>
       <div class="xtra" id="xComp">
-        <div class="fg"><label class="lbl">Director aprobador</label><div class="sw"><select class="fs" id="fApComp"><option value="">Selecciona...</option></select></div></div>
+        <div class="fg"><label class="lbl">Jefe directo que aprueba</label><div class="sw"><select class="fs" id="fApComp"><option value="">Selecciona...</option></select></div></div>
         <div class="fg"><label class="lbl">Fecha solicitada</label><input class="fi" type="date" id="fFechaComp"></div>
         <div class="fg"><label class="lbl">Motivo</label><textarea class="fi" id="fMotivoComp" placeholder="Explica brevemente..."></textarea></div>
         <div class="notice">La solicitud sera revisada y te notificaremos por correo.</div>
       </div>
       <div class="xtra" id="xFest">
-        <div class="fg"><label class="lbl">Director aprobador</label><div class="sw"><select class="fs" id="fApFest"><option value="">Selecciona...</option></select></div></div>
+        <div class="fg"><label class="lbl">Jefe directo que aprueba</label><div class="sw"><select class="fs" id="fApFest"><option value="">Selecciona...</option></select></div></div>
         <div class="fg"><label class="lbl">Fecha del festivo</label><input class="fi" type="date" id="fFechaFest"></div>
         <div class="fg"><label class="lbl">Horario trabajado</label>
           <div class="tg">
@@ -259,7 +259,7 @@ textarea.fi{resize:none;height:60px;font-size:13px;}
         <div class="notice">La solicitud sera revisada y te notificaremos por correo.</div>
       </div>
       <div class="xtra" id="xVac">
-        <div class="fg"><label class="lbl">Director aprobador</label><div class="sw"><select class="fs" id="fApVac"><option value="">Selecciona...</option></select></div></div>
+        <div class="fg"><label class="lbl">Jefe directo que aprueba</label><div class="sw"><select class="fs" id="fApVac"><option value="">Selecciona...</option></select></div></div>
         <div class="fg"><label class="lbl">Fecha inicio</label><input class="fi" type="date" id="fVacIni" onchange="calcVac()"></div>
         <div class="fg"><label class="lbl">Fecha fin</label><input class="fi" type="date" id="fVacFin" onchange="calcVac()"></div>
         <div id="vacNotice" class="notice" style="display:none"></div>
@@ -289,10 +289,19 @@ textarea.fi{resize:none;height:60px;font-size:13px;}
         </div>
         <div id="permNotice" class="notice" style="display:none"></div>
         <div class="fg"><label class="lbl">Motivo</label><textarea class="fi" id="fMotivoPerm" placeholder="Describe brevemente el motivo..."></textarea></div>
+        <div class="fg"><label class="lbl">Soporte (opcional)</label>
+          <label for="fPermSoporte" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px dashed #C4B5FD;border-radius:10px;background:#FAF5FF;cursor:pointer">
+            <span style="font-size:20px">&#128206;</span>
+            <span id="permSopTxt" style="font-size:13px;color:#5B21B6;font-weight:600">Adjunta la cita medica, incapacidad o documento que justifique el permiso</span>
+          </label>
+          <input type="file" id="fPermSoporte" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" style="display:none" onchange="soporteElegido(this)">
+          <div style="font-size:11px;color:#6B7280;margin-top:5px">PDF, JPG o PNG de hasta 5 MB. Tu jefe directo lo vera al revisar la solicitud.</div>
+          <button type="button" id="permSopQuitar" onclick="quitarSoporte()" style="display:none;margin-top:6px;padding:5px 11px;border-radius:7px;border:1px solid #E5E7EB;background:#fff;color:#6B7280;font-size:11px;cursor:pointer">Quitar archivo</button>
+        </div>
         <div class="notice">Tu jefe directo lo revisa primero y luego pasa a Gestion Humana para la aprobacion final. Te notificaremos por correo.</div>
       </div>
       <div class="xtra" id="xCorr">
-        <div class="fg"><label class="lbl">Director para auditoria</label><div class="sw"><select class="fs" id="fApCorr"><option value="">Selecciona...</option></select></div></div>
+        <div class="fg"><label class="lbl">Jefe directo que revisa</label><div class="sw"><select class="fs" id="fApCorr"><option value="">Selecciona...</option></select></div></div>
         <div class="fg"><label class="lbl">Tipo de marcaje</label><div class="sw"><select class="fs" id="fTipoMarcaje"><option value="">Selecciona...</option><option>Entrada a turno</option><option>Salida de turno</option></select></div></div>
         <div class="fg"><label class="lbl">Fecha del marcaje</label><input class="fi" type="date" id="fFechaMarcaje"></div>
         <div class="fg"><label class="lbl">Horas</label>
@@ -433,11 +442,7 @@ async function flushOfflineQueue(){
   for(var i=0;i<items.length;i++){
     var item=items[i];
     try{
-      var urlQ=item.url+'?action=marcar&datos='+encodeURIComponent(JSON.stringify(item.body))+'&t='+Date.now();
-      var rq=await fetch(urlQ);
-      var tq=(await rq.text()||'').trim();
-      if(tq.charAt(0)==='<')throw new Error('servicio');
-      JSON.parse(tq); // confirma que el servidor proceso el registro
+      await enviarAlServidor(item.body, 45000); // confirma que el servidor proceso el registro
       await queueDelete(item.id);
       sent++;
     }catch(e){break;} // stop if still offline
@@ -502,7 +507,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbwnENVY5gDSGf3n69_3qsDYnvIu6pRhHlyrCOdhv9F--dq5ywu4FnKXKp5dWzl0igfy/exec';
+var SU='https://script.google.com/macros/s/AKfycbxk34mUQLaygDPeMcc7tZ7og0pz7rv0VpZsEuheh_2k20R2V0k-qA5OmZHpsiQ75poP/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
@@ -572,7 +577,7 @@ function cargarDatos(){
       var sels=['fApOt','fApComp','fApFest','fApVac','fApCorr','fApPerm'];
       sels.forEach(function(id){
         var el=document.getElementById(id);if(!el)return;
-        el.innerHTML='<option value="">Selecciona director...</option>';
+        el.innerHTML='<option value="">Selecciona tu jefe directo...</option>';
         directoresDB.forEach(function(dir){
           var opt=document.createElement('option');
           opt.value=dir.email;
@@ -583,14 +588,15 @@ function cargarDatos(){
     })
     .catch(function(){
       var fb=[
+        {email:'gestionhumana@amgdecolombia.com',nombre:'Yury Trujillo (Gestion Humana)'},
         {email:'jsbejarano@amgdecolombia.com',nombre:'Juan Sebastian Bejarano'},
         {email:'jespinosa@amgdecolombia.com',nombre:'Javier Espinosa'},
         {email:'srubiano@amgdecolombia.com',nombre:'Sergio Rubiano'}
       ];
-      var sels=['fApOt','fApComp','fApFest','fApVac','fApCorr'];
+      var sels=['fApOt','fApComp','fApFest','fApVac','fApCorr','fApPerm'];
       sels.forEach(function(id){
         var el=document.getElementById(id);if(!el)return;
-        el.innerHTML='<option value="">Selecciona director...</option>';
+        el.innerHTML='<option value="">Selecciona tu jefe directo...</option>';
         fb.forEach(function(dir){
           var opt=document.createElement('option');
           opt.value=dir.email;opt.textContent=dir.nombre;
@@ -618,6 +624,7 @@ function validarCorreo(){
 
 /* ── TIPO SELECTION ── */
 function resetTipo(){
+  if(typeof quitarSoporte==='function'&&document.getElementById('permSopTxt'))quitarSoporte();
   tipo=null;
   document.getElementById('btnIn').classList.remove('on');
   document.getElementById('btnOut').classList.remove('on');
@@ -763,6 +770,7 @@ async function doSend(correo,vehiculo){
     permEmpleado:gv('fPermEmp'),tipoPermiso:gv('fPermTipo'),permModalidad:gv('fPermMod'),
     permDesde:gv('fPermDesde'),permHasta:gv('fPermHasta')||gv('fPermDesde'),
     permHoraIni:gv('fPermHIni'),permHoraFin:gv('fPermHFin'),
+    soporte:(tipo==='perm'&&_soportePerm)?{nombre:_soportePerm.nombre,mime:_soportePerm.mime,b64:_soportePerm.b64}:null,
     fechaComp:gv('fFechaComp'),fechaFest:gv('fFechaFest'),
     horaFestIni:gv('fFestIni'),horaFestFin:gv('fFestFin'),
     fechaInicio:gv('fVacIni'),fechaFin:gv('fVacFin'),
@@ -921,6 +929,11 @@ async function confirmarFoto(){
 }
 
 async function enviarPayload(payload,sb){
+  if(!navigator.onLine && payload && payload.soporte){
+    alert('Para enviar un permiso con soporte necesitas conexion. Conectate e intenta de nuevo, o envialo sin el archivo.');
+    if(sb){sb.disabled=false;sb.textContent='Enviar solicitud de permiso';}
+    return;
+  }
   if(!navigator.onLine){
     await queueSave(SU,payload);
     showOfflineToast('Sin conexion. Tu registro quedo guardado con la hora exacta ('+new Date().toLocaleTimeString('es-CO')+') y se enviara solo cuando recuperes senal.','#92400E');
@@ -932,14 +945,8 @@ async function enviarPayload(payload,sb){
   for(var intento=1;intento<=2 && !confirmado;intento++){
     if(sb && intento>1)sb.textContent='Reintentando...';
     try{
-      var url=SU+'?action=marcar&datos='+encodeURIComponent(JSON.stringify(payload))+'&t='+Date.now();
-      var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
-      var tmr=ctrl?setTimeout(function(){ctrl.abort();}, intento===1?15000:25000):null;
-      var r=await fetch(url, ctrl?{signal:ctrl.signal}:{});
-      if(tmr)clearTimeout(tmr);
-      var txt=(await r.text()||'').trim();
-      if(txt.charAt(0)==='<')throw new Error('servicio');
-      respuesta=JSON.parse(txt);
+      var pesado=JSON.stringify(payload).length>1800;
+      respuesta=await enviarAlServidor(payload, pesado ? (intento===1?45000:60000) : (intento===1?15000:25000));
       confirmado=true;
     }catch(exNet){
       if(intento>=2){
@@ -1087,6 +1094,84 @@ function calcPerm(){
     el.textContent='Permiso de '+n+' dia'+(n===1?'':'s')+' habil'+(n===1?'':'es')+'.';
     el.style.display='block';
   }
+}
+
+/* ── SOPORTE DEL PERMISO ── */
+var _soportePerm=null;
+function soporteElegido(inp){
+  var f=inp.files&&inp.files[0];
+  var txt=document.getElementById('permSopTxt'), q=document.getElementById('permSopQuitar');
+  _soportePerm=null;
+  if(!f){txt.textContent='Adjunta la cita medica, incapacidad o documento que justifique el permiso';q.style.display='none';return;}
+  var tipoOk=/^(application\/pdf|image\/jpeg|image\/png)$/.test(f.type)||/\.(pdf|jpe?g|png)$/i.test(f.name);
+  if(!tipoOk){alert('El soporte debe ser PDF, JPG o PNG.');inp.value='';return;}
+  if(f.size>5*1024*1024 && f.type==='application/pdf'){alert('El PDF supera los 5 MB. Comprime el archivo o toma una foto del documento.');inp.value='';return;}
+  txt.textContent='Preparando '+f.name+'...';
+  prepararSoporte(f).then(function(s){
+    _soportePerm=s;
+    txt.textContent='\u2713 '+f.name+' ('+Math.round(s.bytes/1024)+' KB)';
+    q.style.display='inline-block';
+  }).catch(function(e){
+    alert(e&&e.message?e.message:'No pudimos leer el archivo. Intenta con otro.');
+    inp.value='';txt.textContent='Adjunta la cita medica, incapacidad o documento que justifique el permiso';
+  });
+}
+function quitarSoporte(){
+  _soportePerm=null;
+  var inp=document.getElementById('fPermSoporte'); if(inp)inp.value='';
+  document.getElementById('permSopTxt').textContent='Adjunta la cita medica, incapacidad o documento que justifique el permiso';
+  document.getElementById('permSopQuitar').style.display='none';
+}
+// Las fotos se reducen para que viajen rapido desde el celular sin perder legibilidad
+function prepararSoporte(f){
+  return new Promise(function(res,rej){
+    var lector=new FileReader();
+    lector.onerror=function(){rej(new Error('No pudimos leer el archivo.'));};
+    if(/^image\//.test(f.type)){
+      lector.onload=function(){
+        var img=new Image();
+        img.onload=function(){
+          var max=1800, w=img.width, h=img.height;
+          if(w>max||h>max){ if(w>h){h=Math.round(h*max/w);w=max;} else {w=Math.round(w*max/h);h=max;} }
+          var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+          cv.getContext('2d').drawImage(img,0,0,w,h);
+          var url=cv.toDataURL('image/jpeg',0.82);
+          var b64=url.split(',')[1];
+          var bytes=Math.round(b64.length*0.75);
+          if(bytes>5*1024*1024){rej(new Error('La imagen sigue siendo muy pesada. Toma una foto con menor resolucion.'));return;}
+          res({nombre:f.name.replace(/\.(png|jpe?g)$/i,'')+'.jpg', mime:'image/jpeg', b64:b64, bytes:bytes});
+        };
+        img.onerror=function(){rej(new Error('La imagen no se pudo abrir.'));};
+        img.src=lector.result;
+      };
+      lector.readAsDataURL(f);
+    } else {
+      lector.onload=function(){
+        var b64=String(lector.result).split(',')[1]||'';
+        res({nombre:f.name, mime:'application/pdf', b64:b64, bytes:f.size});
+      };
+      lector.readAsDataURL(f);
+    }
+  });
+}
+
+/* ── ENVIO AL SERVIDOR: direccion web para registros livianos, envio directo para los pesados ── */
+async function enviarAlServidor(payload, timeoutMs){
+  var cuerpo=JSON.stringify(payload);
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var tmr=ctrl?setTimeout(function(){ctrl.abort();}, timeoutMs||20000):null;
+  try{
+    var r;
+    if(cuerpo.length<=1800){
+      r=await fetch(SU+'?action=marcar&datos='+encodeURIComponent(cuerpo)+'&t='+Date.now(), ctrl?{signal:ctrl.signal}:{});
+    } else {
+      // Fotos y soportes: envio directo (texto plano, sin verificacion previa del navegador)
+      r=await fetch(SU, {method:'POST', body:cuerpo, signal:ctrl?ctrl.signal:undefined});
+    }
+    var txt=(await r.text()||'').trim();
+    if(txt.charAt(0)==='<')throw new Error('servicio');
+    return JSON.parse(txt);
+  } finally { if(tmr)clearTimeout(tmr); }
 }
 </script>
 <div id="photoModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem">
