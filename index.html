@@ -224,6 +224,7 @@ textarea.fi{resize:none;height:60px;font-size:13px;}
             <option value="fest">Festivo trabajado</option>
             <option value="vac">Solicitud de vacaciones</option>
             <option value="corr">Correccion de marcaje</option>
+            <option value="perm">Solicitud de permiso</option>
           </select>
         </div>
       </div>
@@ -264,6 +265,31 @@ textarea.fi{resize:none;height:60px;font-size:13px;}
         <div id="vacNotice" class="notice" style="display:none"></div>
         <div class="fg"><label class="lbl">Motivo (opcional)</label><textarea class="fi" id="fMotivoVac" placeholder="Opcional..."></textarea></div>
         <div class="notice">Limite legal: 15 dias habiles. Te notificaremos por correo.</div>
+      </div>
+      <div class="xtra" id="xPerm">
+        <div class="fg"><label class="lbl">Colaborador que toma el permiso</label><div class="sw"><select class="fs" id="fPermEmp"><option value="">Cargando colaboradores...</option></select></div></div>
+        <div class="fg"><label class="lbl">Jefe directo que aprueba</label><div class="sw"><select class="fs" id="fApPerm"><option value="">Selecciona...</option></select></div></div>
+        <div class="fg"><label class="lbl">Tipo de permiso</label><div class="sw"><select class="fs" id="fPermTipo">
+          <option value="">Selecciona...</option>
+          <option>Cita medica</option><option>Calamidad domestica</option><option>Diligencia personal</option>
+          <option>Licencia de luto</option><option>Licencia de maternidad o paternidad</option>
+          <option>Permiso de estudio</option><option>Citacion judicial o legal</option>
+          <option>Votacion o jurado electoral</option><option>Otro</option>
+        </select></div></div>
+        <div class="fg"><label class="lbl">Modalidad</label><div class="sw"><select class="fs" id="fPermMod" onchange="cambioModPerm()">
+          <option value="dia">Dia completo</option><option value="horas">Por horas</option>
+        </select></div></div>
+        <div class="fg"><label class="lbl">Fecha</label><input class="fi" type="date" id="fPermDesde" onchange="calcPerm()"></div>
+        <div class="fg" id="permFinWrap"><label class="lbl">Hasta (si es mas de un dia)</label><input class="fi" type="date" id="fPermHasta" onchange="calcPerm()"></div>
+        <div class="fg" id="permHorasWrap" style="display:none"><label class="lbl">Horario del permiso</label>
+          <div class="tg">
+            <div><div class="tg-lbl">Desde</div><input class="fi" type="time" id="fPermHIni" onchange="calcPerm()"></div>
+            <div><div class="tg-lbl">Hasta</div><input class="fi" type="time" id="fPermHFin" onchange="calcPerm()"></div>
+          </div>
+        </div>
+        <div id="permNotice" class="notice" style="display:none"></div>
+        <div class="fg"><label class="lbl">Motivo</label><textarea class="fi" id="fMotivoPerm" placeholder="Describe brevemente el motivo..."></textarea></div>
+        <div class="notice">Tu jefe directo lo revisa primero y luego pasa a Gestion Humana para la aprobacion final. Te notificaremos por correo.</div>
       </div>
       <div class="xtra" id="xCorr">
         <div class="fg"><label class="lbl">Director para auditoria</label><div class="sw"><select class="fs" id="fApCorr"><option value="">Selecciona...</option></select></div></div>
@@ -476,7 +502,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbzHgKXg7rjSjOcL-P7SnoZbwwR0lKexiG5vKwEir-h4YSASQrDjSGSgTRBi-TeWg-7W/exec';
+var SU='https://script.google.com/macros/s/AKfycbwnENVY5gDSGf3n69_3qsDYnvIu6pRhHlyrCOdhv9F--dq5ywu4FnKXKp5dWzl0igfy/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
@@ -537,13 +563,13 @@ if(navigator.geolocation){
 function cargarDatos(){
   fetch(SU+'?action=getEmpleados&t='+Date.now())
     .then(function(r){return r.json();})
-    .then(function(d){empleadosDB=(d.empleados||[]).map(function(e){return (e.Email||e.email||'').toLowerCase();});})
+    .then(function(d){empleadosLista=(d.empleados||[]).map(function(e){return {email:(e.Email||e.email||'').toLowerCase(),nombre:e.Nombre||e.nombre||''};});empleadosDB=empleadosLista.map(function(e){return e.email;});llenarPermEmp();})
     .catch(function(){});
   fetch(SU+'?action=getDirectores')
     .then(function(r){return r.json();})
     .then(function(d){
       directoresDB=d.directores||[];
-      var sels=['fApOt','fApComp','fApFest','fApVac','fApCorr'];
+      var sels=['fApOt','fApComp','fApFest','fApVac','fApCorr','fApPerm'];
       sels.forEach(function(id){
         var el=document.getElementById(id);if(!el)return;
         el.innerHTML='<option value="">Selecciona director...</option>';
@@ -596,7 +622,7 @@ function resetTipo(){
   document.getElementById('btnIn').classList.remove('on');
   document.getElementById('btnOut').classList.remove('on');
   document.getElementById('solSel').value='';
-  ['xOt','xComp','xFest','xVac','xCorr'].forEach(function(id){
+  ['xOt','xComp','xFest','xVac','xCorr','xPerm'].forEach(function(id){
     document.getElementById(id).classList.remove('on');
   });
   document.getElementById('sbtn').style.display='none';
@@ -625,16 +651,18 @@ function setTipoInt(v){
     'comp':'Enviar solicitud de dia compensatorio',
     'fest':'Registrar festivo trabajado',
     'vac':'Enviar solicitud de vacaciones',
-    'corr':'Enviar solicitud de correccion de marcaje'
+    'corr':'Enviar solicitud de correccion de marcaje',
+    'perm':'Enviar solicitud de permiso'
   };
   sb.textContent=labels[v]||'Enviar';
   sb.style.display='block';
   if(v==='in'){sb.className='sbtn c-in';document.getElementById('btnIn').classList.add('on');document.getElementById('btnOut').classList.remove('on');}
   else if(v==='out'){sb.className='sbtn c-out';document.getElementById('btnOut').classList.add('on');document.getElementById('btnIn').classList.remove('on');}
   else{sb.className='sbtn c-sol';document.getElementById('btnIn').classList.remove('on');document.getElementById('btnOut').classList.remove('on');}
-  var xMap={ot:'xOt',comp:'xComp',fest:'xFest',vac:'xVac',corr:'xCorr'};
+  var xMap={ot:'xOt',comp:'xComp',fest:'xFest',vac:'xVac',corr:'xCorr',perm:'xPerm'};
   if(xMap[v])document.getElementById(xMap[v]).classList.add('on');
   if(v==='vac')calcVac();
+  if(v==='perm'){llenarPermEmp();calcPerm();}
 }
 
 /* ── VACACIONES ── */
@@ -695,6 +723,11 @@ async function enviar(){
   if(tipo==='comp'&&(!gv('fApComp')||!gv('fFechaComp'))){alert('Compensatorio: selecciona director y fecha.');return;}
   if(tipo==='fest'&&(!gv('fApFest')||!gv('fFechaFest'))){alert('Festivo: selecciona director y fecha.');return;}
   if(tipo==='vac'&&(!gv('fApVac')||!gv('fVacIni')||!gv('fVacFin'))){alert('Vacaciones: completa director y fechas.');return;}
+  if(tipo==='perm'){
+    if(!gv('fPermEmp')||!gv('fApPerm')||!gv('fPermTipo')||!gv('fPermDesde')){alert('Permiso: completa colaborador, jefe directo, tipo y fecha.');return;}
+    if(gv('fPermMod')==='horas'&&(!gv('fPermHIni')||!gv('fPermHFin'))){alert('Permiso: indica el horario del permiso.');return;}
+    if(gv('fPermHasta')&&gv('fPermHasta')<gv('fPermDesde')){alert('Permiso: la fecha final no puede ser anterior a la inicial.');return;}
+  }
   if(tipo==='corr'&&(!gv('fApCorr')||!gv('fTipoMarcaje')||!gv('fFechaMarcaje')||!gv('fHoraInc')||!gv('fHoraCorr'))){alert('Correccion: completa todos los campos.');return;}
   if(tipo==='out'&&checkOT()){
     otCb=function(){doSend(correo,vehiculo);};
@@ -708,12 +741,13 @@ async function doSend(correo,vehiculo){
   var labels={
     'in':'Entrada a turno','out':'Salida de turno','ot':'Tiempo extra',
     'comp':'Dia compensatorio','fest':'Festivo trabajado',
-    'vac':'Solicitud de vacaciones','corr':'Correccion de marcaje'
+    'vac':'Solicitud de vacaciones','corr':'Correccion de marcaje',
+    'perm':'Solicitud de permiso'
   };
   var tipoLabel=labels[tipo]||tipo;
   var aprobadorEmail=tipo==='ot'?gv('fApOt'):tipo==='comp'?gv('fApComp'):
     tipo==='fest'?gv('fApFest'):tipo==='vac'?gv('fApVac'):
-    tipo==='corr'?gv('fApCorr'):'';
+    tipo==='corr'?gv('fApCorr'):tipo==='perm'?gv('fApPerm'):'';
   var aprobadorNombre='';
   directoresDB.forEach(function(d){if(d.email===aprobadorEmail)aprobadorNombre=d.nombre;});
   var clientTimestamp=new Date().toISOString();
@@ -725,7 +759,10 @@ async function doSend(correo,vehiculo){
     horasSolicitadas:calcHrs(gv('fHoraIni'),gv('fHoraFin')),
     motivo:tipo==='ot'?gv('fMotivoOt'):tipo==='comp'?gv('fMotivoComp'):
       tipo==='fest'?gv('fMotivoFest'):tipo==='vac'?gv('fMotivoVac'):
-      tipo==='corr'?gv('fMotivoCorr'):'',
+      tipo==='corr'?gv('fMotivoCorr'):tipo==='perm'?gv('fMotivoPerm'):'',
+    permEmpleado:gv('fPermEmp'),tipoPermiso:gv('fPermTipo'),permModalidad:gv('fPermMod'),
+    permDesde:gv('fPermDesde'),permHasta:gv('fPermHasta')||gv('fPermDesde'),
+    permHoraIni:gv('fPermHIni'),permHoraFin:gv('fPermHFin'),
     fechaComp:gv('fFechaComp'),fechaFest:gv('fFechaFest'),
     horaFestIni:gv('fFestIni'),horaFestFin:gv('fFestFin'),
     fechaInicio:gv('fVacIni'),fechaFin:gv('fVacFin'),
@@ -771,11 +808,11 @@ async function doSend(correo,vehiculo){
   },500);
   var ovIcBg={
     'in':'#ECFDF5','out':'#ECFDF5','ot':'#FFFBEB',
-    'comp':'#EFF6FF','fest':'#F5F3FF','vac':'#ECFDF5','corr':'#F3F4F6'
+    'comp':'#EFF6FF','fest':'#F5F3FF','vac':'#ECFDF5','corr':'#F3F4F6','perm':'#F5F3FF'
   };
   var ovIcColor={
     'in':'#059669','out':'#059669','ot':'#D97706',
-    'comp':'#1E40AF','fest':'#4C1D95','vac':'#059669','corr':'#374151'
+    'comp':'#1E40AF','fest':'#4C1D95','vac':'#059669','corr':'#374151','perm':'#7C3AED'
   };
   var ovIcSvg={
     'in':'<polyline points="20 6 9 17 4 12"/>',
@@ -784,6 +821,7 @@ async function doSend(correo,vehiculo){
     'comp':'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
     'fest':'<polyline points="20 6 9 17 4 12"/>',
     'vac':'<polyline points="20 6 9 17 4 12"/>',
+    'perm':'<polyline points="20 6 9 17 4 12"/>',
     'corr':'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>'
   };
   var ic=document.getElementById('ovIc');
@@ -799,7 +837,8 @@ async function doSend(correo,vehiculo){
     'comp':'Solicitud enviada. Recibiras respuesta por correo.',
     'fest':'Festivo registrado. Recibiras respuesta por correo.',
     'vac':'Solicitud enviada a '+(aprobadorNombre||'director')+'. Recibiras respuesta por correo.',
-    'corr':'Solicitud enviada para auditoria. Recibiras respuesta por correo.'
+    'corr':'Solicitud enviada para auditoria. Recibiras respuesta por correo.',
+    'perm':'Permiso enviado a '+(aprobadorNombre||'tu jefe directo')+'. Luego pasa a Gestion Humana. Te avisaremos por correo.'
   };
   document.getElementById('ovSub').textContent=subs[tipo]||'Registro enviado.';
   document.getElementById('ovTime').textContent=ahora();
@@ -1010,6 +1049,45 @@ async function consultarMiEstado(correo){
     if(v.indexOf('@')>0)tmr=setTimeout(function(){consultarMiEstado(v);},900);
   });
 })();
+
+/* ── PERMISOS ── */
+var empleadosLista=[];
+function llenarPermEmp(){
+  var sel=document.getElementById('fPermEmp'); if(!sel)return;
+  var actual=sel.value;
+  var yo=(document.getElementById('fEmail')||{}).value||'';
+  yo=yo.trim().toLowerCase();
+  var lista=empleadosLista.slice().sort(function(a,b){return a.nombre.localeCompare(b.nombre);});
+  sel.innerHTML='<option value="">Selecciona el colaborador...</option>'+
+    lista.map(function(e){return '<option value="'+e.email+'">'+e.nombre+(e.email===yo?' (yo)':'')+'</option>';}).join('');
+  if(actual)sel.value=actual;
+  else if(yo&&lista.some(function(e){return e.email===yo;}))sel.value=yo;
+}
+function cambioModPerm(){
+  var h=(document.getElementById('fPermMod')||{}).value==='horas';
+  document.getElementById('permHorasWrap').style.display=h?'block':'none';
+  document.getElementById('permFinWrap').style.display=h?'none':'block';
+  calcPerm();
+}
+function calcPerm(){
+  var el=document.getElementById('permNotice'); if(!el)return;
+  var d1=gv('fPermDesde'), d2=gv('fPermHasta')||d1, mod=gv('fPermMod');
+  if(!d1){el.style.display='none';return;}
+  if(mod==='horas'){
+    var a=gv('fPermHIni'), b=gv('fPermHFin');
+    if(!a||!b){el.style.display='none';return;}
+    var pa=a.split(':'),pb=b.split(':');
+    var mn=(parseInt(pb[0],10)*60+parseInt(pb[1],10))-(parseInt(pa[0],10)*60+parseInt(pa[1],10));
+    el.textContent=mn>0?('Permiso de '+(Math.round(mn/60*100)/100)+' horas.'):'La hora final debe ser posterior a la inicial.';
+    el.style.display='block';
+  } else {
+    var x=new Date(d1+'T00:00:00'), y=new Date(d2+'T00:00:00'), n=0;
+    if(y<x){el.textContent='La fecha final no puede ser anterior a la inicial.';el.style.display='block';return;}
+    for(var t=new Date(x);t<=y;t.setDate(t.getDate()+1)){var w=t.getDay();if(w!==0&&w!==6)n++;}
+    el.textContent='Permiso de '+n+' dia'+(n===1?'':'s')+' habil'+(n===1?'':'es')+'.';
+    el.style.display='block';
+  }
+}
 </script>
 <div id="photoModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem">
   <div style="background:white;border-radius:20px;padding:1.5rem;max-width:360px;width:100%;text-align:center">
