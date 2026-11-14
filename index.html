@@ -391,6 +391,51 @@ async function getDeviceFingerprint(){
   return Math.abs(hash).toString(36).toUpperCase();
 }
 
+// ── Datos del equipo: tipo, sistema, modelo e identificador propio ───────────
+function idEquipo(){
+  var k='amg_equipo_id',v='';
+  try{v=localStorage.getItem(k)||'';}catch(e){}
+  if(!v){
+    var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';v='EQ-';
+    try{var a=new Uint8Array(10);crypto.getRandomValues(a);for(var i=0;i<a.length;i++)v+=c[a[i]%c.length];}
+    catch(e){for(var j=0;j<10;j++)v+=c[Math.floor(Math.random()*c.length)];}
+    try{localStorage.setItem(k,v);}catch(e){}
+  }
+  return v;
+}
+async function infoDispositivo(){
+  var ua=navigator.userAgent||'',tp=navigator.maxTouchPoints||0;
+  var ipadOS=/Macintosh/.test(ua)&&tp>1;
+  var tipo;
+  if(/iPad|Tablet/i.test(ua)||ipadOS||(/Android/i.test(ua)&&!/Mobile/i.test(ua)))tipo='Tablet';
+  else if(/Mobi|iPhone|iPod|Android/i.test(ua))tipo='Celular';
+  else tipo='Computador';
+  var so='',m;
+  if((m=ua.match(/Android ([\d.]+)/)))so='Android '+m[1];
+  else if((m=ua.match(/(?:iPhone|CPU) OS ([\d_]+)/)))so='iOS '+m[1].replace(/_/g,'.');
+  else if(ipadOS)so='iPadOS';
+  else if(/Windows NT 10/.test(ua))so='Windows 10/11';
+  else if(/Windows/.test(ua))so='Windows';
+  else if(/CrOS/.test(ua))so='ChromeOS';
+  else if(/Mac OS X/.test(ua))so='macOS';
+  else if(/Linux/.test(ua))so='Linux';
+  var nav='';
+  if(/Edg\//.test(ua))nav='Edge';else if(/OPR\//.test(ua))nav='Opera';
+  else if(/SamsungBrowser/.test(ua))nav='Samsung Internet';else if(/CriOS|Chrome\//.test(ua))nav='Chrome';
+  else if(/FxiOS|Firefox\//.test(ua))nav='Firefox';else if(/Safari\//.test(ua))nav='Safari';
+  var modelo='';
+  if((m=ua.match(/Android [\d.]+; ([^;)]+?)(?: Build|\))/))&&m[1]&&m[1]!=='K')modelo=m[1].trim();
+  else if(/iPhone/.test(ua))modelo='iPhone';else if(/iPad/.test(ua)||ipadOS)modelo='iPad';
+  try{
+    if(!modelo&&navigator.userAgentData&&navigator.userAgentData.getHighEntropyValues){
+      var hv=await navigator.userAgentData.getHighEntropyValues(['model','platformVersion']);
+      if(hv&&hv.model)modelo=hv.model;
+    }
+  }catch(e){}
+  var det=[so,modelo,nav,screen.width+'x'+screen.height].filter(Boolean).join(' · ');
+  return {tipo:tipo,detalle:det,id:idEquipo()};
+}
+
 // ── OFFLINE QUEUE ────────────────────────────────────────────────────────────
 var DB_NAME='amg_offline', DB_VER=1, STORE='queue';
 var _db=null;
@@ -507,7 +552,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-var SU='https://script.google.com/macros/s/AKfycbwTKQgTJU2B4WLZBYllgjRFN7RoSMI7jcSQLpzlfSddFogcU9Mil1prKKjuqSKXM2r2/exec';
+var SU='https://script.google.com/macros/s/AKfycbzK4KbkZctsNA5C0Yae1CaQ78huazxCvJ2sP_yjTwan1OSjCQ0e4mrdUfKlFYLDntE/exec';
 var gLat=null,gLng=null,gAcc=null,tipo=null,otCb=null;
 var empleadosDB=[],directoresDB=[];
 
@@ -759,7 +804,9 @@ async function doSend(correo,vehiculo){
   directoresDB.forEach(function(d){if(d.email===aprobadorEmail)aprobadorNombre=d.nombre;});
   var clientTimestamp=new Date().toISOString();
   var deviceFp=await getDeviceFingerprint();
-  var payload={deviceFingerprint:deviceFp,
+  var devInfo={tipo:'',detalle:'',id:''};
+  try{devInfo=await infoDispositivo();}catch(eDv){}
+  var payload={deviceFingerprint:deviceFp,deviceTipo:devInfo.tipo,deviceDetalle:devInfo.detalle,deviceId:devInfo.id,
     email:correo,vehiculo:vehiculo,tipo:tipoLabel,clientTimestamp:clientTimestamp,
     aprobador:aprobadorNombre,aprobadorEmail:aprobadorEmail,
     fechaOT:gv('fFechaOt'),horaInicioExtra:gv('fHoraIni'),horaFinExtra:gv('fHoraFin'),
@@ -783,7 +830,7 @@ async function doSend(correo,vehiculo){
   sb.disabled=true;sb.textContent='Verificando...';
   // Check fingerprint before sending
   try{
-    var fpUrl=SU+'?action=checkFingerprint&email='+encodeURIComponent(correo)+'&fp='+encodeURIComponent(payload.deviceFingerprint||'');
+    var fpUrl=SU+'?action=checkFingerprint&email='+encodeURIComponent(correo)+'&fp='+encodeURIComponent(payload.deviceFingerprint||'')+'&tipo='+encodeURIComponent(payload.deviceTipo||'')+'&did='+encodeURIComponent(payload.deviceId||'');
     var fpR=await fetch(fpUrl);
     var fpD=JSON.parse(await fpR.text());
     if(fpD.status==='ok'&&fpD.alerta){
