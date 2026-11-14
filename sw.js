@@ -1,64 +1,47 @@
-// AMG Service Worker — Offline Queue
-const CACHE = 'amg-v1';
-const QUEUE_KEY = 'amg-offline-queue';
+// AMG Service Worker v2
+// 1) Guarda la pagina para que la app abra aunque no haya senal.
+// 2) No intercepta los envios al servidor: la cola de marcajes sin conexion
+//    la maneja la pagina (IndexedDB) y solo borra un marcaje cuando el
+//    servidor confirma que quedo registrado.
+const CACHE = 'amg-v2';
 
-// Cache the app shell on install
 self.addEventListener('install', function(e) {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', function(e) {
-  e.waitUntil(self.clients.claim());
-});
-
-// Intercept POST requests to GAS
-self.addEventListener('fetch', function(e) {
-  var url = e.request.url;
-  
-  // Only intercept POST to our script
-  if (e.request.method !== 'POST' || url.indexOf('script.google.com') < 0) {
-    return;
-  }
-
-  e.respondWith(
-    fetch(e.request.clone())
-      .then(function(response) {
-        // Online — succeeded, clear any queued item for this user if it was a retry
-        return response;
-      })
-      .catch(function(err) {
-        // Offline — queue the request
-        return e.request.json().then(function(body) {
-          return saveToQueue(url, body);
-        }).then(function() {
-          // Return a fake success so the UI shows confirmation
-          return new Response(JSON.stringify({status:'queued',msg:'Sin conexion. Registro guardado localmente y se enviara automaticamente cuando recuperes senal.'}), {
-            headers: {'Content-Type':'application/json'}
-          });
-        });
-      })
+  e.waitUntil(
+    caches.keys().then(function(keys) {
+      return Promise.all(keys.filter(function(k) { return k !== CACHE; }).map(function(k) { return caches.delete(k); }));
+    }).then(function() { return self.clients.claim(); })
   );
 });
 
-function saveToQueue(url, body) {
-  return self.clients.matchAll().then(function(clients) {
-    // Store in IndexedDB via message to client
-    clients.forEach(function(client) {
-      client.postMessage({type:'QUEUE_ADD', url:url, body:body});
-    });
-  });
-}
-
-// Listen for sync event (Background Sync API)
-self.addEventListener('sync', function(e) {
-  if (e.tag === 'amg-sync') {
-    e.waitUntil(flushQueue());
-  }
+self.addEventListener('fetch', function(e) {
+  var req = e.request;
+  if (req.method !== 'GET') return;                       // envios: siempre directo a la red
+  if (req.url.indexOf('script.google.com') >= 0) return;  // datos del servidor: nunca desde cache
+  var esPagina = req.mode === 'navigate' || (req.headers.get('accept') || '').indexOf('text/html') >= 0;
+  if (!esPagina) return;
+  // Red primero; si no hay senal, la ultima version guardada de la pagina
+  e.respondWith(
+    fetch(req).then(function(resp) {
+      var copia = resp.clone();
+      caches.open(CACHE).then(function(c) { c.put(req, copia); });
+      return resp;
+    }).catch(function() {
+      return caches.match(req, { ignoreSearch: true }).then(function(r) {
+        return r || caches.match('./', { ignoreSearch: true });
+      });
+    })
+  );
 });
 
-function flushQueue() {
-  // Signal clients to flush
-  return self.clients.matchAll().then(function(clients) {
-    clients.forEach(function(c) { c.postMessage({type:'FLUSH_QUEUE'}); });
-  });
-}
+// Al recuperar senal, pedirle a la pagina que suba lo pendiente
+self.addEventListener('sync', function(e) {
+  if (e.tag === 'amg-sync') {
+    e.waitUntil(self.clients.matchAll().then(function(clients) {
+      clients.forEach(function(c) { c.postMessage({ type: 'FLUSH_QUEUE' }); });
+    }));
+  }
+});
