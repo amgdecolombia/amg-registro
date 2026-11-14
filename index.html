@@ -451,10 +451,23 @@ function openDB(){
 }
 
 function queueSave(url, body){
+  // El marcaje guardado sin conexion conserva su hora y su GPS originales
+  var b={};for(var k in body)b[k]=body[k];
+  b.offline=true; b.offlineGuardado=new Date().toISOString();
+  if(!b.clientTimestamp)b.clientTimestamp=b.offlineGuardado;
   return openDB().then(function(db){
     return new Promise(function(resolve,reject){
       var tx=db.transaction(STORE,'readwrite');
-      tx.objectStore(STORE).add({url:url,body:body,savedAt:new Date().toISOString()});
+      tx.objectStore(STORE).add({url:url,body:b,savedAt:b.offlineGuardado,estado:'pendiente'});
+      tx.oncomplete=function(){resolve();setTimeout(revisarPendientesOffline,400);}; tx.onerror=reject;
+    });
+  });
+}
+function queuePut(item){
+  return openDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction(STORE,'readwrite');
+      tx.objectStore(STORE).put(item);
       tx.oncomplete=resolve; tx.onerror=reject;
     });
   });
@@ -480,25 +493,101 @@ function queueDelete(id){
   });
 }
 
-async function flushOfflineQueue(){
-  var items=await queueGetAll();
-  if(!items||!items.length)return;
-  var sent=0;
-  for(var i=0;i<items.length;i++){
-    var item=items[i];
-    try{
-      await enviarAlServidor(item.body, 45000); // confirma que el servidor proceso el registro
-      await queueDelete(item.id);
-      sent++;
-    }catch(e){break;} // stop if still offline
-  }
-  if(sent>0){
-    var msg='Se enviaron '+sent+' registro'+(sent===1?'':'s')+' guardado'+(sent===1?'':'s')+' sin conexion.';
-    var banner=document.getElementById('offline-banner');
-    if(banner)banner.style.display='none';
+var _subiendoOffline=false;
+// Sube los marcajes guardados sin conexion. Solo se borran cuando el servidor confirma que quedaron registrados.
+async function flushOfflineQueue(manual){
+  if(_subiendoOffline)return {sent:0,pend:-1};
+  _subiendoOffline=true;
+  var sent=0, yaExistian=0, rechazados=0, sinRed=false;
+  try{
+    var items=await queueGetAll();
+    if(!items||!items.length)return {sent:0,pend:0};
+    items.sort(function(a,b){return (a.body.clientTimestamp||'')<(b.body.clientTimestamp||'')?-1:1;});
+    for(var i=0;i<items.length;i++){
+      var item=items[i];
+      if(item.estado==='rechazado' && !manual)continue;
+      var r=null;
+      try{ r=await enviarAlServidor(item.body, 45000); }
+      catch(e){ sinRed=true; break; }
+      if(r && r.status==='ok' && r.advertencia==='MARCAJE_DUPLICADO'){
+        await queueDelete(item.id); yaExistian++;
+      } else if(r && r.status==='ok' && r.registrado!==false && !r.sinGps && !r.bloqueado){
+        await queueDelete(item.id); sent++;
+      } else {
+        item.estado='rechazado'; item.motivo=(r&&r.msg)||'El servidor no acepto el registro.'; item.intentos=(item.intentos||0)+1;
+        await queuePut(item); rechazados++;
+      }
+    }
+  } finally { _subiendoOffline=false; }
+  var pend=(await queueGetAll()).length;
+  if(sent>0||yaExistian>0){
+    var msg='Se subieron '+sent+' marcaje'+(sent===1?'':'s')+' guardado'+(sent===1?'':'s')+' sin conexion, con su hora y ubicacion originales.'+(yaExistian?' '+yaExistian+' ya estaba'+(yaExistian===1?'':'n')+' registrado'+(yaExistian===1?'':'s')+'.':'');
     showOfflineToast(msg,'#065F46');
   }
+  actualizarBannerOffline(pend);
+  if(pend>0 && (manual || sinRed===false || rechazados>0)) mostrarPendientesOffline();
+  else if(pend===0) cerrarPendientesOffline();
+  return {sent:sent,pend:pend,sinRed:sinRed};
 }
+function actualizarBannerOffline(pend){
+  var banner=document.getElementById('offline-banner');if(!banner)return;
+  var countEl=banner.querySelector('.offline-count');
+  if(countEl)countEl.textContent=pend?pend+' marcaje'+(pend===1?'':'s')+' por subir':'';
+  banner.style.display=(!navigator.onLine)?'flex':'none';
+}
+// ── Aviso al colaborador: marcajes guardados sin conexion que aun no se suben
+function fmtOff(iso){try{var d=new Date(iso);return d.toLocaleDateString('es-CO',{weekday:'short',day:'2-digit',month:'2-digit'})+' a las '+d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}}
+async function mostrarPendientesOffline(){
+  var items=await queueGetAll(); if(!items||!items.length){cerrarPendientesOffline();return;}
+  var m=document.getElementById('offModal');
+  if(!m){
+    m=document.createElement('div');m.id='offModal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(m);
+  }
+  var filas=items.map(function(it){
+    var b=it.body||{}, gps=(b.geoLat!==null&&b.geoLat!==undefined&&b.geoLat!=='');
+    var est=it.estado==='rechazado'
+      ?'<div style="color:#991B1B;font-size:11px;margin-top:3px"><b>No se pudo registrar:</b> '+(it.motivo||'')+'</div>'
+      :'<div style="color:#92400E;font-size:11px;margin-top:3px">Pendiente por subir</div>';
+    return '<div style="border:1.5px solid '+(it.estado==='rechazado'?'#FECACA':'#FDE68A')+';border-radius:10px;padding:9px 11px;margin-bottom:7px;text-align:left">'+
+      '<div style="font-weight:700;font-size:13px;color:#0A3D47">'+(b.tipo||'Marcaje')+'</div>'+
+      '<div style="font-size:12px;color:#374151">Marcado el '+fmtOff(b.clientTimestamp||it.savedAt)+'</div>'+
+      '<div style="font-size:11px;color:#6B7280">'+(gps?'Con ubicacion GPS guardada':'Sin ubicacion GPS')+'</div>'+est+
+      (it.estado==='rechazado'?'<button onclick="descartarOffline('+it.id+')" style="margin-top:6px;padding:5px 10px;border-radius:8px;border:1px solid #D1D5DB;background:white;font-size:11px;cursor:pointer">Ya lo resolvi, quitar de la lista</button>':'')+
+      '</div>';
+  }).join('');
+  var hayRech=items.some(function(it){return it.estado==='rechazado';});
+  m.innerHTML='<div style="background:white;border-radius:18px;padding:18px;max-width:380px;width:100%;max-height:85vh;overflow:auto;text-align:center">'+
+    '<div style="font-size:30px">&#128246;</div>'+
+    '<h3 style="font-size:16px;color:#0A3D47;margin:4px 0 6px">Tienes '+items.length+' marcaje'+(items.length===1?'':'s')+' sin conexion por subir</h3>'+
+    '<p style="font-size:12px;color:#475569;margin:0 0 12px;line-height:1.5">Se registro un intento de marcaje cuando no tenias senal. Se va a subir con la hora y la ubicacion de ese momento, no con la hora actual.</p>'+
+    filas+
+    (hayRech?'<p style="font-size:11px;color:#991B1B;margin:6px 0 10px;line-height:1.5">Los que no se pudieron registrar requieren una correccion de marcaje con Gestion Humana. Indica la fecha y la hora que aparecen aqui.</p>':'')+
+    '<button id="offSubirBtn" onclick="subirOfflineAhora()" style="width:100%;padding:13px;border-radius:12px;border:none;background:#065F46;color:white;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px">Subir ahora</button>'+
+    '<div id="offMsg" style="font-size:12px;margin-top:8px;color:#6B7280"></div>'+
+    '<button onclick="cerrarPendientesOffline()" style="margin-top:8px;padding:9px 16px;border-radius:10px;border:1px solid #D1D5DB;background:white;font-family:inherit;font-size:12px;cursor:pointer">Cerrar (se seguira intentando solo)</button></div>';
+  m.style.display='flex';
+}
+function cerrarPendientesOffline(){var m=document.getElementById('offModal');if(m)m.style.display='none';}
+async function subirOfflineAhora(){
+  var b=document.getElementById('offSubirBtn'),msg=document.getElementById('offMsg');
+  if(!navigator.onLine){if(msg){msg.style.color='#92400E';msg.textContent='Todavia no hay senal. Se subira solo apenas la recuperes.';}return;}
+  if(b){b.disabled=true;b.textContent='Subiendo...';}
+  var r=await flushOfflineQueue(true);
+  if(b){b.disabled=false;b.textContent='Subir ahora';}
+  if(r&&r.sinRed&&msg){msg.style.color='#92400E';msg.textContent='La senal es muy debil. Se seguira intentando automaticamente.';}
+}
+async function descartarOffline(id){await queueDelete(id);mostrarPendientesOffline();actualizarBannerOffline((await queueGetAll()).length);}
+// Revisa la cola: si hay senal la sube sola; si no se pudo, avisa al colaborador
+async function revisarPendientesOffline(){
+  var items=await queueGetAll(); actualizarBannerOffline(items?items.length:0);
+  if(!items||!items.length)return;
+  if(navigator.onLine){ var r=await flushOfflineQueue(false); if(r&&r.pend>0)mostrarPendientesOffline(); }
+  else mostrarPendientesOffline();
+}
+setInterval(function(){ if(navigator.onLine) queueGetAll().then(function(it){ if(it&&it.some(function(x){return x.estado!=='rechazado';})) flushOfflineQueue(false); }); }, 45000);
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') revisarPendientesOffline(); });
 
 function showOfflineToast(msg, color){
   color=color||'#0A3D47';
@@ -514,7 +603,7 @@ function updateOfflineUI(isOnline){
   if(!banner)return;
   if(isOnline){
     banner.style.display='none';
-    flushOfflineQueue();
+    flushOfflineQueue(false);
   } else {
     banner.style.display='flex';
   }
@@ -531,7 +620,7 @@ if('serviceWorker' in navigator){
   }).catch(function(){});
   // Listen for SW messages
   navigator.serviceWorker.addEventListener('message',function(e){
-    if(e.data&&e.data.type==='FLUSH_QUEUE') flushOfflineQueue();
+    if(e.data&&e.data.type==='FLUSH_QUEUE') flushOfflineQueue(false);
   });
 }
 
@@ -539,20 +628,10 @@ if('serviceWorker' in navigator){
 document.addEventListener('DOMContentLoaded',function(){
   updateOfflineUI(navigator.onLine);
   // Check for pending items
-  queueGetAll().then(function(items){
-    if(items&&items.length>0&&navigator.onLine){
-      flushOfflineQueue();
-    } else if(items&&items.length>0&&!navigator.onLine){
-      var banner=document.getElementById('offline-banner');
-      if(banner){
-        var countEl=banner.querySelector('.offline-count');
-        if(countEl)countEl.textContent=items.length+' registro'+(items.length===1?'':'s')+' en cola';
-      }
-    }
-  });
+  setTimeout(revisarPendientesOffline,1200);
 });
 
-var SU='https://script.google.com/macros/s/AKfycbx1Ul1pXK4ikE0m3J-jXqChKsl9cmMWNnbwNdhXf8b6lvf1-MmIbSSKPrTOkTx7aw_K/exec';
+var SU='https://script.google.com/macros/s/AKfycbzcUeqZ_v0tV0TPVHq5zKf9Qw7acTb8yPUNDiwF27fPDcpa2T5T91sSYq2fc4rSckq9/exec';
 var gLat=null,gLng=null,gAcc=null,gTs=0,tipo=null,otCb=null;
 var GPS_MAX_M=1000; // en celular no se acepta una ubicacion aproximada (peor que 1 km)
 function esCelularGPS(){var ua=navigator.userAgent||'';return /Mobi|Android|iPhone|iPad|iPod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);}
@@ -861,7 +940,10 @@ async function doSend(correo,vehiculo){
   // Check fingerprint before sending
   try{
     var fpUrl=SU+'?action=checkFingerprint&email='+encodeURIComponent(correo)+'&fp='+encodeURIComponent(payload.deviceFingerprint||'')+'&tipo='+encodeURIComponent(payload.deviceTipo||'')+'&did='+encodeURIComponent(payload.deviceId||'');
-    var fpR=await fetch(fpUrl);
+    var fpCtrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var fpTmr=fpCtrl?setTimeout(function(){fpCtrl.abort();},7000):null;
+    var fpR;
+    try{ fpR=await fetch(fpUrl, fpCtrl?{signal:fpCtrl.signal}:{}); } finally { if(fpTmr)clearTimeout(fpTmr); }
     var fpD=JSON.parse(await fpR.text());
     if(fpD.status==='ok'&&fpD.alerta){
       sb.disabled=false;sb.textContent='Registrar';
@@ -1022,7 +1104,7 @@ async function enviarPayload(payload,sb){
   }
   if(!navigator.onLine){
     await queueSave(SU,payload);
-    showOfflineToast('Sin conexion. Tu registro quedo guardado con la hora exacta ('+new Date().toLocaleTimeString('es-CO')+') y se enviara solo cuando recuperes senal.','#92400E');
+    showOfflineToast('Sin conexion. Tu marcaje quedo guardado con la hora ('+new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})+') y la ubicacion de este momento. Se subira solo cuando recuperes senal.','#92400E');
     if(sb){sb.disabled=false;sb.textContent='Registrar';}
     return;
   }
