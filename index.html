@@ -164,6 +164,15 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;back
 .div::before,.div::after{background:rgba(148,163,184,.45) !important}
 .ov{backdrop-filter:blur(8px) !important;-webkit-backdrop-filter:blur(8px)}
 .ov-card{background:rgba(255,255,255,.86) !important;backdrop-filter:blur(24px) saturate(170%);-webkit-backdrop-filter:blur(24px) saturate(170%);border:1px solid rgba(255,255,255,.6)}
+/* Ventanas de aviso y comunicados del registro */
+.crm{display:none;position:fixed;inset:0;z-index:10000;background:rgba(5,30,37,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:1.25rem}
+.crmc{background:rgba(255,255,255,.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.7);border-radius:20px;max-width:380px;width:100%;overflow:hidden;box-shadow:0 30px 70px rgba(0,0,0,.35)}
+.crmh{display:flex;gap:12px;align-items:center;padding:16px 18px;background:linear-gradient(135deg,rgba(10,61,71,.92),rgba(26,150,144,.82));color:#fff}
+.crmh span{font-size:24px}.crmh small{display:block;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;opacity:.85}.crmh b{display:block;font-size:15px;margin-top:2px}
+.crmb{padding:16px 18px 6px;font-size:13.5px;line-height:1.55;color:#1F2937;white-space:pre-wrap}
+.crmf{padding:0 18px 12px;font-size:11px;color:#6B7280}
+.crmc button{display:block;width:calc(100% - 36px);margin:4px 18px 10px;padding:12px;border:0;border-radius:12px;background:linear-gradient(135deg,#0A3D47,#0E6060);color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.crmc button.sec{background:transparent;color:#475569;margin-top:0;margin-bottom:14px;padding:8px}
 </style>
 </head>
 <body>
@@ -649,11 +658,11 @@ document.addEventListener('DOMContentLoaded',function(){
   setTimeout(revisarPendientesOffline,1200);
 });
 
-var SU='https://script.google.com/macros/s/AKfycbwpT82zxkECIKdGBvVCKVLIQwiFTIvxV3uFzecQW2ZQmSlsHkOOF_shkgmZWDZJ2gSQ/exec';
+var SU='https://script.google.com/macros/s/AKfycbx_1CAm6QiRQl5_pvGiYtm0EGjnLuH2NwEmu6lB4a4QpHbVW0Z0gcMai_gLKuk3ERRB/exec';
 var gLat=null,gLng=null,gAcc=null,gTs=0,tipo=null,otCb=null;
 var GPS_MAX_M=1000; // en celular no se acepta una ubicacion aproximada (peor que 1 km)
 function esCelularGPS(){var ua=navigator.userAgent||'';return /Mobi|Android|iPhone|iPad|iPod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);}
-var empleadosDB=[],directoresDB=[];
+var empleadosDB=[],directoresDB=[],aliasDB={};
 
 function pad(n){return String(n).padStart(2,'0');}
 function ahora(){
@@ -720,7 +729,10 @@ if(navigator.geolocation){
 function cargarDatos(){
   fetch(SU+'?action=getEmpleados&t='+Date.now())
     .then(function(r){return r.json();})
-    .then(function(d){empleadosLista=(d.empleados||[]).map(function(e){return {email:(e.Email||e.email||'').toLowerCase(),nombre:e.Nombre||e.nombre||''};});empleadosDB=empleadosLista.map(function(e){return e.email;});llenarPermEmp();})
+    .then(function(d){empleadosLista=(d.empleados||[]).map(function(e){return {email:(e.Email||e.email||'').toLowerCase(),nombre:e.Nombre||e.nombre||''};});empleadosDB=empleadosLista.map(function(e){return e.email;});
+      // Correos alternos: se aceptan y se registran con el correo principal
+      aliasDB={};(d.empleados||[]).forEach(function(e){(e.Alternos||[]).forEach(function(a){aliasDB[String(a).toLowerCase()]=(e.Email||e.email||'').toLowerCase();});});
+      llenarPermEmp();})
     .catch(function(){});
   fetch(SU+'?action=getDirectores')
     .then(function(r){return r.json();})
@@ -771,7 +783,36 @@ function validarCorreo(){
   } else {
     ferr.style.display='none';
     document.getElementById('fEmail').style.borderColor='';
+    if(v)revisarComunicadosRegistro(v);
   }
+}
+// ── Comunicados de la empresa: se muestran solo a un colaborador activo, al escribir su correo
+var _comReg=[],_comRegVisto={};
+async function revisarComunicadosRegistro(correo){
+  if(aliasDB[correo])correo=aliasDB[correo];
+  if(!correo||_comRegVisto[correo]||(empleadosDB.length&&empleadosDB.indexOf(correo)<0))return;
+  _comRegVisto[correo]=1;
+  try{
+    var r=await fetch(SU+'?action=getComunicadosRegistro&correo='+encodeURIComponent(correo)+'&t='+Date.now());
+    var d=JSON.parse(await r.text());
+    _comReg=(d&&d.comunicados)||[];_comReg.correo=correo;
+    if(_comReg.length)mostrarComunicadoRegistro();
+  }catch(e){}
+}
+function escR(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function mostrarComunicadoRegistro(){
+  var c=_comReg[0],m=document.getElementById('comRegModal');
+  if(!c){if(m)m.style.display='none';return;}
+  if(!m){m=document.createElement('div');m.id='comRegModal';m.className='crm';document.body.appendChild(m);}
+  m.innerHTML='<div class="crmc"><div class="crmh"><span>&#128227;</span><div><small>Comunicado de la empresa'+(_comReg.length>1?' · 1 de '+_comReg.length:'')+'</small><b>'+escR(c.titulo)+'</b></div></div>'+
+    '<div class="crmb">'+escR(c.mensaje)+'</div><div class="crmf">'+escR(c.autor||'')+(c.fecha?' · '+escR(String(c.fecha).slice(0,10)):'')+'</div>'+
+    '<button onclick="entendidoComunicadoRegistro()">Entendido</button></div>';
+  m.style.display='flex';
+}
+function entendidoComunicadoRegistro(){
+  var c=_comReg.shift();
+  if(c)try{fetch(SU+'?action=verComunicadoRegistro&correo='+encodeURIComponent(_comReg.correo||'')+'&id='+encodeURIComponent(c.id)+'&t='+Date.now());}catch(e){}
+  mostrarComunicadoRegistro();
 }
 
 /* ── TIPO SELECTION ── */
@@ -889,6 +930,7 @@ async function enviar(){
     }
   }
   var correo=document.getElementById('fEmail').value.trim().toLowerCase();
+  if(aliasDB[correo])correo=aliasDB[correo];
   var vehiculo=gv('fVehiculo');
   if(!correo){alert('Ingresa tu correo corporativo.');return;}
   var validDomain=correo.endsWith('@amgdecolombia.com')||correo.endsWith('@inmovimento.co');
@@ -1034,6 +1076,19 @@ async function doSend(correo,vehiculo){
 var _photoStream=null,_photoDataUrl=null,_pendingPayload2=null,_pendingCb=null;
 
 async function solicitarFotoVerificacion(payload,cb){
+  // Antes de la camara: aviso respetuoso sobre el uso de equipos de otras personas
+  if(!payload._avisoOk){
+    var av=document.getElementById('avisoEquipo');
+    if(!av){av=document.createElement('div');av.id='avisoEquipo';av.className='crm';document.body.appendChild(av);}
+    av.innerHTML='<div class="crmc"><div class="crmh"><span>&#128274;</span><div><small>Verificacion de identidad</small><b>Este equipo no corresponde a tu registro</b></div></div>'+
+      '<div class="crmb">Cada colaborador debe registrar su propia jornada desde su equipo. Registrar la jornada de otra persona no esta permitido y podria considerarse una falta a las politicas de la empresa.<br><br>Si estas usando un equipo prestado por una razon valida, no hay problema: tomate una foto para confirmar que eres tu y continua con tu registro.</div>'+
+      '<button id="avisoEquipoOk">Entendido, tomar la foto</button><button class="sec" id="avisoEquipoNo">Cancelar</button></div>';
+    av.style.display='flex';
+    document.getElementById('avisoEquipoOk').onclick=function(){av.style.display='none';payload._avisoOk=true;solicitarFotoVerificacion(payload,cb);};
+    document.getElementById('avisoEquipoNo').onclick=function(){av.style.display='none';var sb=document.getElementById('sbtn');if(sb){sb.disabled=false;sb.textContent='Registrar';}};
+    return;
+  }
+  delete payload._avisoOk;
   _pendingPayload2=payload;_pendingCb=cb;_photoDataUrl=null;
   var m=document.getElementById('photoModal');
   m.style.display='flex';
