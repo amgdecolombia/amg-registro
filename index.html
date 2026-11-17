@@ -631,7 +631,7 @@ document.addEventListener('DOMContentLoaded',function(){
   setTimeout(revisarPendientesOffline,1200);
 });
 
-var SU='https://script.google.com/macros/s/AKfycbyMfygqR-AT0kVOud2a3bItGrelozPFsYTI7nDV00u7Y9VLufktR2gHrq54Saz0jBZQ/exec';
+var SU='https://script.google.com/macros/s/AKfycbwidB0Oxw72ZN6qo1rfttyIXLDRGUx8S3_IvL7JSOWuo5DBd5JaAa6TtLO-524oLS0K/exec';
 var gLat=null,gLng=null,gAcc=null,gTs=0,tipo=null,otCb=null;
 var GPS_MAX_M=1000; // en celular no se acepta una ubicacion aproximada (peor que 1 km)
 function esCelularGPS(){var ua=navigator.userAgent||'';return /Mobi|Android|iPhone|iPad|iPod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);}
@@ -1353,7 +1353,7 @@ async function enviarAlServidor(payload, timeoutMs){
   <div style="background:white;border-radius:20px;padding:1.5rem;max-width:360px;width:100%;text-align:center">
     <div style="font-size:32px;margin-bottom:8px">&#128247;</div>
     <h3 style="font-size:15px;font-weight:700;color:#0A3D47;margin-bottom:8px">Verificacion de identidad</h3>
-    <p style="font-size:12px;color:#475569;margin-bottom:14px;line-height:1.6">&#9888;&#65039; <strong style="color:#991B1B">Este celular no corresponde a la persona que se esta registrando.</strong> Por politica de AMG de Colombia SAS se requiere una foto de verificacion. La foto se envia a Gestion Humana y al jefe directo y queda guardada como evidencia.</p>
+    <p style="font-size:12px;color:#475569;margin-bottom:14px;line-height:1.6">&#9888;&#65039; <strong style="color:#991B1B">Este equipo no corresponde a la persona que se esta registrando.</strong> Por politica de AMG de Colombia SAS se requiere una foto de verificacion. La foto se envia a Gestion Humana y al jefe directo y queda guardada como evidencia.</p>
     <div style="background:#F1F5F9;border-radius:12px;overflow:hidden;margin-bottom:12px">
       <video id="photoVideo" autoplay playsinline style="width:100%;display:block;transform:scaleX(-1)"></video>
       <canvas id="photoCanvas" style="display:none"></canvas>
