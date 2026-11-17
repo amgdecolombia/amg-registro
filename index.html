@@ -147,6 +147,24 @@ textarea.fi{resize:none;height:60px;font-size:13px;}
 .footer{font-size:10px;color:rgba(255,255,255,.4);
   text-align:center;margin-top:12px;font-family:monospace;}
 </style>
+<style id="estiloVidrio">
+/* Estilo vidrio con colores corporativos. Para quitarlo basta con borrar este bloque. */
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background:
+ radial-gradient(520px 420px at 10% 12%, rgba(122,182,72,.30), transparent 62%),
+ radial-gradient(620px 520px at 92% 88%, rgba(214,180,140,.34), transparent 60%),
+ radial-gradient(600px 480px at 85% 8%, rgba(26,150,144,.32), transparent 60%)}
+.card{background:rgba(255,255,255,.74) !important;backdrop-filter:blur(26px) saturate(170%);-webkit-backdrop-filter:blur(26px) saturate(170%);
+ border:1px solid rgba(255,255,255,.55);box-shadow:0 30px 70px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.6) !important}
+.hdr{background:linear-gradient(160deg,rgba(7,46,55,.86) 0%,rgba(10,61,71,.80) 50%,rgba(26,150,144,.72) 100%) !important}
+.logo-box{box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.fi,.fs{background:rgba(255,255,255,.86) !important;border-color:rgba(203,213,225,.9) !important}
+.fi:focus,.fs:focus{border-color:#0E6060 !important;box-shadow:0 0 0 3px rgba(14,96,96,.12)}
+.geo-wait{background:rgba(240,249,255,.75) !important}.geo-ok{background:rgba(236,253,245,.75) !important}.geo-fail{background:rgba(254,242,242,.8) !important}
+.notice{background:rgba(239,246,255,.78) !important}.notice.warn{background:rgba(254,242,242,.8) !important}
+.div::before,.div::after{background:rgba(148,163,184,.45) !important}
+.ov{backdrop-filter:blur(8px) !important;-webkit-backdrop-filter:blur(8px)}
+.ov-card{background:rgba(255,255,255,.86) !important;backdrop-filter:blur(24px) saturate(170%);-webkit-backdrop-filter:blur(24px) saturate(170%);border:1px solid rgba(255,255,255,.6)}
+</style>
 </head>
 <body>
 <div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;background:#92400E;color:white;padding:10px 20px;z-index:9998;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:600">
@@ -631,7 +649,7 @@ document.addEventListener('DOMContentLoaded',function(){
   setTimeout(revisarPendientesOffline,1200);
 });
 
-var SU='https://script.google.com/macros/s/AKfycbwidB0Oxw72ZN6qo1rfttyIXLDRGUx8S3_IvL7JSOWuo5DBd5JaAa6TtLO-524oLS0K/exec';
+var SU='https://script.google.com/macros/s/AKfycbwmXFRi_iIpyYDB_34lFr1QBH1Cc2VlBhUiHgnLIQql_i_hX-E3SWQIJaEQAV9Q6OF5/exec';
 var gLat=null,gLng=null,gAcc=null,gTs=0,tipo=null,otCb=null;
 var GPS_MAX_M=1000; // en celular no se acepta una ubicacion aproximada (peor que 1 km)
 function esCelularGPS(){var ua=navigator.userAgent||'';return /Mobi|Android|iPhone|iPad|iPod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);}
