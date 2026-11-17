@@ -631,7 +631,7 @@ document.addEventListener('DOMContentLoaded',function(){
   setTimeout(revisarPendientesOffline,1200);
 });
 
-var SU='https://script.google.com/macros/s/AKfycbxhAod0tOXHXt3NBsI9FvSlPDTYrPizMCJFBVlOXJ8WFI70KjQcx-vBQRfrYrE1Jg7y/exec';
+var SU='https://script.google.com/macros/s/AKfycbyMfygqR-AT0kVOud2a3bItGrelozPFsYTI7nDV00u7Y9VLufktR2gHrq54Saz0jBZQ/exec';
 var gLat=null,gLng=null,gAcc=null,gTs=0,tipo=null,otCb=null;
 var GPS_MAX_M=1000; // en celular no se acepta una ubicacion aproximada (peor que 1 km)
 function esCelularGPS(){var ua=navigator.userAgent||'';return /Mobi|Android|iPhone|iPad|iPod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);}
@@ -917,6 +917,7 @@ async function doSend(correo,vehiculo){
   try{devInfo=await infoDispositivo();}catch(eDv){}
   var payload={deviceFingerprint:deviceFp,deviceTipo:devInfo.tipo,deviceDetalle:devInfo.detalle,deviceId:devInfo.id,
     email:correo,vehiculo:vehiculo,tipo:tipoLabel,clientTimestamp:clientTimestamp,
+    idMarcaje:'MK'+Date.now().toString(36)+Math.random().toString(36).slice(2,9),
     aprobador:aprobadorNombre,aprobadorEmail:aprobadorEmail,
     fechaOT:gv('fFechaOt'),horaInicioExtra:gv('fHoraIni'),horaFinExtra:gv('fHoraFin'),
     horasSolicitadas:calcHrs(gv('fHoraIni'),gv('fHoraFin')),
