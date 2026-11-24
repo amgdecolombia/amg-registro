@@ -422,12 +422,15 @@ async function getDeviceFingerprint(){
 function idEquipo(){
   var k='amg_equipo_id',v='';
   try{v=localStorage.getItem(k)||'';}catch(e){}
+  // Copia de respaldo en una cookie del sitio, por si el navegador limpia solo el almacenamiento local
+  if(!v){try{var m=document.cookie.match(/(?:^|;\s*)amg_eq=([A-Z0-9-]+)/);if(m)v=m[1];}catch(e){}}
   if(!v){
     var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';v='EQ-';
     try{var a=new Uint8Array(10);crypto.getRandomValues(a);for(var i=0;i<a.length;i++)v+=c[a[i]%c.length];}
     catch(e){for(var j=0;j<10;j++)v+=c[Math.floor(Math.random()*c.length)];}
-    try{localStorage.setItem(k,v);}catch(e){}
   }
+  try{localStorage.setItem(k,v);}catch(e){}
+  try{document.cookie='amg_eq='+v+';max-age=63072000;path=/;SameSite=Lax;Secure';}catch(e){}
   return v;
 }
 async function infoDispositivo(){
@@ -658,7 +661,7 @@ document.addEventListener('DOMContentLoaded',function(){
   setTimeout(revisarPendientesOffline,1200);
 });
 
-var SU='https://script.google.com/macros/s/AKfycbwWp7cwQwF-Bp5Fo_IZkPAh7dDO9hYNfFNyBdTr7Apg7Zpsy3aQzIVzONwe5981B8fk/exec';
+var SU='https://script.google.com/macros/s/AKfycbwRjoBCzwkm7vRDN4AZuFjapEbDHiUD1Yo3Y7wnuLEDyaaIh_nWoaUZ-niDrx5jCMqM/exec';
 var gLat=null,gLng=null,gAcc=null,gTs=0,tipo=null,otCb=null;
 var GPS_MAX_M=1000; // en celular no se acepta una ubicacion aproximada (peor que 1 km)
 function esCelularGPS(){var ua=navigator.userAgent||'';return /Mobi|Android|iPhone|iPad|iPod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);}
@@ -1000,7 +1003,7 @@ async function doSend(correo,vehiculo){
   sb.disabled=true;sb.textContent='Verificando...';
   // Check fingerprint before sending
   try{
-    var fpUrl=SU+'?action=checkFingerprint&email='+encodeURIComponent(correo)+'&fp='+encodeURIComponent(payload.deviceFingerprint||'')+'&tipo='+encodeURIComponent(payload.deviceTipo||'')+'&did='+encodeURIComponent(payload.deviceId||'');
+    var fpUrl=SU+'?action=checkFingerprint&email='+encodeURIComponent(correo)+'&fp='+encodeURIComponent(payload.deviceFingerprint||'')+'&tipo='+encodeURIComponent(payload.deviceTipo||'')+'&did='+encodeURIComponent(payload.deviceId||'')+'&det='+encodeURIComponent(payload.deviceDetalle||'');
     var fpCtrl=(typeof AbortController!=='undefined')?new AbortController():null;
     var fpTmr=fpCtrl?setTimeout(function(){fpCtrl.abort();},7000):null;
     var fpR;
